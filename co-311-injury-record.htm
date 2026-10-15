@@ -1,0 +1,663 @@
+<title>🦖 學校受傷記錄</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: one-screen app on desktop. Left column = front/back figures with category boxes, then trend
+   (or the category breakdown once a box is picked). Right column = date range, then the cause list,
+   which fills the remaining height and scrolls inside. Heat colours (red > orange > yellow) mean "how many times". */
+:root{
+  --bg:#EEF2F5; --surface:#FFFFFF; --ink:#16212B; --muted:#5A6978; --line:#D8E0E7;
+  --heat-hi:#E5383B; --heat-mid:#F08A24; --heat-lo:#E8B800; --on-hi:#FFFFFF; --on-lo:#2A1D00;
+  --heat-hi-soft:#FDE9E9; --heat-mid-soft:#FDEEDD; --heat-lo-soft:#FCF4D2;
+  --spot-soft:#FBE4E4; --head:#5B4FD6; --head-soft:#E9E8FB; --line-other:#5B7C99;
+  --body-fill:#F6F8FA; --body-line:#8797A7; --focus:#1F6FEB;
+  --cz-fall:#2E9E5B; --cz-person:#D6336C; --cz-gear:#0F8FA8; --cz-other:#6B7A89;
+  --f-display:"Bricolage Grotesque","PingFang HK","Microsoft JhengHei","Noto Sans CJK TC",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans","PingFang HK","Microsoft JhengHei","Noto Sans CJK TC",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F161C; --surface:#18222B; --ink:#E8EEF3; --muted:#9AA9B7; --line:#2C3A46;
+    --heat-hi:#FF5A5F; --heat-mid:#FF9F40; --heat-lo:#FFD24A; --on-hi:#2A0A0B; --on-lo:#2A1D00;
+    --heat-hi-soft:#3A1E21; --heat-mid-soft:#3A2A17; --heat-lo-soft:#37321A;
+    --spot-soft:#3A1E21; --head:#9B94FF; --head-soft:#25234A; --line-other:#8FB0CC;
+    --body-fill:#1D2933; --body-line:#5C7285; --focus:#6CA6FF;
+    --cz-fall:#5BD58B; --cz-person:#FF7AA8; --cz-gear:#4CC9E0; --cz-other:#9AA9B7;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F161C; --surface:#18222B; --ink:#E8EEF3; --muted:#9AA9B7; --line:#2C3A46;
+  --heat-hi:#FF5A5F; --heat-mid:#FF9F40; --heat-lo:#FFD24A; --on-hi:#2A0A0B; --on-lo:#2A1D00;
+  --heat-hi-soft:#3A1E21; --heat-mid-soft:#3A2A17; --heat-lo-soft:#37321A;
+  --spot-soft:#3A1E21; --head:#9B94FF; --head-soft:#25234A; --line-other:#8FB0CC;
+  --body-fill:#1D2933; --body-line:#5C7285; --focus:#6CA6FF;
+  --cz-fall:#5BD58B; --cz-person:#FF7AA8; --cz-gear:#4CC9E0; --cz-other:#9AA9B7;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.55}
+button{font:inherit;color:inherit}
+.wrap{height:100%;display:flex;flex-direction:column;max-width:1180px;margin:0 auto;padding-block:16px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{flex:none}
+header h1{font-family:var(--f-display);font-size:28px;line-height:1.2;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.layout{flex:1;min-height:0;display:grid;grid-template-columns:minmax(300px,420px) minmax(0,1fr);grid-template-rows:minmax(0,1fr);gap:24px;margin-top:16px}
+.col-left{min-height:0;min-width:0;overflow-y:auto;display:flex;flex-direction:column;gap:16px;padding:2px 4px 2px 2px;scrollbar-width:thin}
+.col-left>*{flex:none}
+.col-right{min-height:0;min-width:0;display:flex;flex-direction:column;gap:16px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px}
+.cause-slot{display:contents}
+.cause-panel{flex:1;min-height:0;display:flex;flex-direction:column}
+#list{flex:1;min-height:0;overflow-y:auto;padding-right:6px;scrollbar-width:thin}
+.chip:focus-visible,.area-row:focus-visible,.crumbs button:focus-visible,.reset:focus-visible,.box:focus-visible,.range input:focus-visible,.range select:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.figure svg{display:block;width:100%;height:auto}
+.body-shape{fill:var(--body-fill);stroke:var(--body-line);stroke-width:1.6;stroke-linejoin:round}
+.body-line{fill:none;stroke:var(--body-line);stroke-width:1.6;stroke-linecap:round}
+.fig-title{font:600 22px var(--f-body);fill:var(--ink);text-anchor:middle;letter-spacing:.06em}
+.side-label{font:600 22px var(--f-body);fill:var(--muted);text-anchor:middle}
+.spot{cursor:pointer;outline:none}
+.spot .hit{fill:transparent}
+.spot .halo{opacity:.45;transform-box:fill-box;transform-origin:center;animation:breathe 2.8s ease-out infinite;animation-delay:var(--d)}
+.spot .core{stroke:var(--surface);stroke-width:1.2;transform-box:fill-box;transform-origin:center;animation:pulse 2.8s ease-in-out infinite;animation-delay:var(--d)}
+.spot .n{font:500 7.5px var(--f-mono);pointer-events:none}
+.spot.lv-hi .halo,.spot.lv-hi .core{fill:var(--heat-hi)}
+.spot.lv-mid .halo,.spot.lv-mid .core{fill:var(--heat-mid)}
+.spot.lv-lo .halo,.spot.lv-lo .core{fill:var(--heat-lo)}
+.spot.lv-hi .n{fill:var(--on-hi)}
+.spot.lv-mid .n,.spot.lv-lo .n{fill:var(--on-lo)}
+.spot:hover .core{stroke:var(--ink)}
+.spot:focus-visible .core{stroke:var(--focus);stroke-width:2.2}
+.spot.sel .core{stroke:var(--ink);stroke-width:2}
+.has-sel .spot:not(.on){opacity:.35}
+@keyframes breathe{0%{transform:scale(1);opacity:.5}100%{transform:scale(2.3);opacity:0}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+@media (prefers-reduced-motion: reduce){.spot .halo,.spot .core{animation:none}.spot .halo{opacity:.25}}
+.legend{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:6px 14px;margin:8px 0 0;color:var(--muted);font-size:12px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:middle;margin-right:5px}
+.legend .hi{background:var(--heat-hi)}.legend .mid{background:var(--heat-mid)}.legend .lo{background:var(--heat-lo)}
+.boxes-title{margin:16px 0 8px;font-weight:600}
+.boxes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.box{--c:var(--line);--soft:var(--surface);border:2px solid var(--c);border-radius:12px;padding:8px 4px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--soft);color:var(--ink)}
+.box.lv-hi{--c:var(--heat-hi);--soft:var(--heat-hi-soft)}
+.box.lv-mid{--c:var(--heat-mid);--soft:var(--heat-mid-soft)}
+.box.lv-lo{--c:var(--heat-lo);--soft:var(--heat-lo-soft)}
+.box .bl{font-size:13px;font-weight:600}
+.box .bn{font:500 28px/1.1 var(--f-mono)}
+.box[aria-pressed="true"]{outline:3px solid var(--ink);outline-offset:2px}
+.boxes.has-sel .box[aria-pressed="false"]{opacity:.55}
+.box:disabled{opacity:.4;cursor:default}
+.note{margin:10px 0 0;color:var(--muted);font-size:12px}
+.range{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
+.range label{display:flex;align-items:center;gap:8px;color:var(--muted)}
+.range select,.range input{font:inherit;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 8px;color-scheme:inherit}
+.range select{padding-right:4px;cursor:pointer}
+.range .sep{color:var(--muted)}
+.reset{border:0;background:none;color:var(--focus);cursor:pointer;padding:6px 4px;text-decoration:underline}
+.stats{display:flex;flex-wrap:wrap;margin-top:16px;border-top:1px solid var(--line)}
+.stats div{flex:1 1 110px;padding:12px 0 0}
+.stats div+div{padding-left:16px;border-left:1px solid var(--line)}
+.stats b{display:block;font:500 28px/1.1 var(--f-mono)}
+.stats b small{font:500 13px var(--f-body);color:var(--muted);margin-left:3px}
+.stats div>span{display:block;color:var(--muted);font-size:12px}
+.stats .rng{font-family:var(--f-mono);margin-top:2px}
+.stats .head b{color:var(--head)}
+h2{font-family:var(--f-display);font-size:18px;margin:0 0 10px;letter-spacing:-.005em}
+#detail h2{display:flex;align-items:baseline;justify-content:space-between}
+h2 .cnt{margin-left:auto;padding-left:10px;font:400 13px var(--f-body);color:var(--muted)}
+.crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:8px;color:var(--muted);font-size:13px}
+.crumbs button{border:0;background:none;color:var(--focus);cursor:pointer;padding:2px 0}
+.crumbs b{font-weight:600;color:var(--ink)}
+.area-list{list-style:none;margin:0;padding:0}
+.area-row{display:grid;grid-template-columns:8em minmax(0,1fr) 2em;align-items:center;gap:12px;width:100%;background:none;border:0;padding:7px 8px;border-radius:8px;cursor:pointer;text-align:left}
+.area-row:hover,.area-row.is-sel{background:var(--bg)}
+.area-row.is-sel>span:first-child{font-weight:600}
+.track{height:8px;background:var(--bg);border-radius:4px;overflow:hidden}
+.area-row.is-sel .track,.area-row:hover .track{background:var(--surface)}
+.fill{display:block;height:100%;border-radius:4px}
+.lv-hi .fill{background:var(--heat-hi)}.lv-mid .fill{background:var(--heat-mid)}.lv-lo .fill{background:var(--heat-lo)}
+.num{font:500 14px var(--f-mono);text-align:right}
+.tag{display:inline-block;font-size:11px;line-height:1;padding:3px 6px;border-radius:5px;background:var(--head-soft);color:var(--head);margin-left:6px;vertical-align:1px;font-weight:500}
+.chart-legend{display:flex;gap:16px;color:var(--muted);font-size:12px;margin-bottom:6px}
+.chart-legend i{display:inline-block;width:16px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.chart-legend .sw-head{background:var(--head)}.chart-legend .sw-other{background:var(--line-other)}
+.trend svg{display:block;width:100%;height:auto}
+.trend .grid{stroke:var(--line);stroke-width:1}
+.trend text{font:11px var(--f-mono);fill:var(--muted)}
+.trend .ln{fill:none;stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}
+.trend .ln-head{stroke:var(--head)}
+.trend .ln-other{stroke:var(--line-other)}
+.trend .dot{stroke:var(--surface);stroke-width:2}
+.trend .dot-head{fill:var(--head)}
+.trend .dot-other{fill:var(--line-other)}
+.trend .val{font:500 11px var(--f-mono);text-anchor:middle}
+.trend .val-head{fill:var(--head)}
+.trend .val-other{fill:var(--line-other)}
+.chips{flex:none;display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px}
+.chip{border:1px solid var(--line);background:none;border-radius:999px;padding:5px 12px;cursor:pointer;color:var(--muted)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip em{font:normal 500 12px var(--f-mono);margin-left:6px}
+.cz-fall{--cc:var(--cz-fall)}.cz-person{--cc:var(--cz-person)}.cz-gear{--cc:var(--cz-gear)}.cz-other{--cc:var(--cz-other)}
+.item{display:grid;grid-template-columns:52px minmax(0,1fr);gap:14px;padding:12px 14px;margin:0 0 10px;background:var(--bg);border-radius:10px;border-left:4px solid var(--cc,var(--line))}
+.dt{text-align:center;line-height:1.2}
+.dt b{display:block;font:500 24px var(--f-mono)}
+.dt span{display:block;color:var(--muted);font-size:12px}
+.item-top{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
+.item h3{margin:0;font-size:15px;font-weight:600;margin-right:auto}
+.item .tag{margin-left:0}
+.cause{display:inline-flex;align-items:center;gap:5px;font-size:12px;line-height:1;padding:4px 8px;border-radius:999px;color:var(--cc);background:color-mix(in srgb,var(--cc) 15%,transparent);font-weight:500}
+.cause::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--cc)}
+.item p{margin:6px 0 0;max-width:68ch}
+.meta{margin:10px 0 0;padding-top:10px;border-top:1px dashed var(--line);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2.2fr) minmax(0,1.1fr);gap:8px 14px}
+.meta div{min-width:0}
+.meta dt{color:var(--muted);font-size:11.5px;margin:0}
+.meta dd{margin:1px 0 0;font-weight:500;color:var(--ink);font-size:13px}
+.chip i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--cc)}
+.empty{padding:20px 0;color:var(--muted)}
+footer{color:var(--muted);font-size:12px}
+@media (max-width:820px){
+  /* Mobile: header, summary and category totals stay pinned while the page scrolls.
+     col-left / col-right / cards dissolve (display:contents) so every block is a direct child of .layout and can be re-ordered. */
+  html,body{height:auto}
+  /* --pb = space under the last block; the cause panel height subtracts it so, at the end of the scroll, its top lands exactly on the pinned stack */
+  :root{--pb:8px}
+  .wrap{height:auto;padding-bottom:var(--pb)}
+  header{position:sticky;top:0;z-index:30;background:var(--bg);padding:8px 0}
+  header h1{font-size:22px}
+  .layout{display:flex;flex-direction:column;gap:16px}
+  .col-left,.col-right,.fig-card,.range-card{display:contents}
+  .stats{order:2;position:sticky;top:var(--hh,48px);z-index:20;flex-wrap:nowrap;margin:0;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:8px 10px}
+  .stats div{flex:1 1 0;min-width:0;padding:0}
+  .stats div+div{padding-left:8px;margin-left:8px}
+  .stats b{font-size:20px}
+  .stats b small{font-size:11px;margin-left:2px}
+  .stats div>span{font-size:11px;white-space:nowrap}
+  .stats .rng{display:none}
+  /* one line on phones: select + two dates share the width, text a little smaller */
+  .range{flex-wrap:nowrap;gap:6px;padding:12px 10px}
+  .range label{flex:1 1 0;min-width:0;gap:4px;font-size:13px}
+  .range select,.range input{font-size:13px;padding:6px 4px;min-width:0}
+  .range input{width:100%}
+  .range select{flex:none}
+  .range .sep{flex:none;font-size:13px}
+  @media (max-width:380px){.range select,.range input,.range label,.range .sep{font-size:12px}}
+  .range input::-webkit-calendar-picker-indicator{display:none}   /* saves width; tapping the date still opens the picker */
+  .range{order:1;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px}
+  .fig-top{order:3;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .boxes-wrap{order:4;position:sticky;top:calc(var(--hh,48px) + var(--sh,60px) + 8px);z-index:19;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 10px;box-shadow:0 -8px 0 var(--bg)}
+  .boxes-title{margin:0 0 6px;font-size:12px}
+  .box{padding:4px 2px}
+  .box .bn{font-size:20px}
+  #overview,#detail{order:5}
+  /* Cause list pins under the boxes and takes whatever screen height is left. */
+  /* Once the cause panel is docked under the totals, the page itself stops: no rubber-band, and the list's scroll never chains to the page. */
+  html,body{overscroll-behavior-y:none}
+  #list{overscroll-behavior:contain}
+  .meta{grid-template-columns:1fr}
+  .meta div{display:grid;grid-template-columns:3em minmax(0,1fr);gap:8px}
+  .meta dd{margin:0}
+  .item{grid-template-columns:44px minmax(0,1fr);gap:10px;padding:12px}
+  /* The slot keeps the layout space; once it reaches the pinned stack the panel is switched to position:fixed (JS adds .docked),
+     so it cannot be dragged or rubber-banded away from under the totals. */
+  .cause-slot{display:block;order:6;height:calc(100vh - var(--stack,200px) - var(--pb));height:calc(100dvh - var(--stack,200px) - var(--pb));min-height:220px}
+  .cause-panel{flex:none;height:100%;max-height:none}
+  .cause-panel.docked{position:fixed;z-index:10}
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>🦖 學校受傷記錄</h1>
+  </header>
+
+  <div class="layout">
+    <aside class="col-left">
+      <section class="panel fig-card" aria-label="身體圖同部位總計">
+        <div class="fig-top">
+        <div class="figure">
+          <svg id="body" viewBox="0 0 478 506" role="group" aria-label="🦖 正面同背面輪廓，彩色點代表受傷位置">
+            <defs>
+              <g id="sil">
+                <path class="body-shape" d="M114 24.6C90 24.6 72 40 71.4 64.5L71.4 77C60 77 57 97 73.5 105C80 122 88 129 100.5 132L100.5 143.4L72 153Q64 156 60 164L37.5 244.5L21.8 255.3Q17.3 257.3 18.9 261.3Q19.8 263.1 21.6 262.2L27.4 260.4L25.2 284.8A3.55 3 0 0 0 32.3 284.8A3.55 3 0 0 0 39.4 284.8A3.55 3 0 0 0 46.5 284.8A3.55 3 0 0 0 53.6 284.8L78.5 189L76.5 405L55.5 418.5Q52 422 56 425Q58 427.5 62 427.5L100 427.5Q109.5 427.5 109.5 418L109.8 282L118.2 282L118.5 418Q118.5 427.5 128 427.5L166 427.5Q170 427.5 172 425Q176 422 172.5 418.5L151.5 405L149.5 189L174.4 284.8A3.55 3 0 0 0 181.5 284.8A3.55 3 0 0 0 188.6 284.8A3.55 3 0 0 0 195.7 284.8A3.55 3 0 0 0 202.8 284.8L200.6 260.4L206.4 262.2Q208.2 263.1 209.1 261.3Q210.7 257.3 206.2 255.3L190.5 244.5L168 164Q164 156 156 153L127.5 143.4L127.5 132C140 129 148 122 154.5 105C171 97 168 77 156.6 77L156.6 64.5C156 40 138 24.6 114 24.6Z"/>
+                <!-- finger dividers lean with the arm: top is shifted 3.3 toward the body, matching the arm slope -->
+                <path class="body-line" d="M35.6 272.1L32.3 284.8M42.7 272.1L39.4 284.8M49.8 272.1L46.5 284.8M192.4 272.1L195.7 284.8M185.3 272.1L188.6 284.8M178.2 272.1L181.5 284.8"/>
+              </g>
+            </defs>
+            <text class="fig-title" x="114" y="24">正面</text>
+            <text class="fig-title" x="364" y="24">背面</text>
+            <g transform="translate(0 34)">
+              <use href="#sil"/>
+              <g id="spots-front"></g>
+            </g>
+            <g transform="translate(250 34)">
+              <use href="#sil"/>
+              <path class="body-line" stroke-dasharray="3 6" d="M114 146V262"/>
+              <g id="spots-back"></g>
+            </g>
+            <text class="side-label" x="85" y="496">右</text>
+            <text class="side-label" x="143" y="496">左</text>
+            <text class="side-label" x="335" y="496">左</text>
+            <text class="side-label" x="393" y="496">右</text>
+          </svg>
+        </div>
+        <div class="legend">
+          <span><i class="hi"></i>最多</span>
+          <span><i class="mid"></i>中</span>
+          <span><i class="lo"></i>較少</span>
+        </div>
+        </div>
+
+        <div class="boxes-wrap">
+          <div class="boxes-title">部位總計</div>
+          <div class="boxes" id="boxes"></div>
+        </div>
+      </section>
+
+      <section class="panel trend" id="overview">
+        <h2>每週趨勢</h2>
+        <div class="chart-legend"><span><i class="sw-head"></i>撞頭</span><span><i class="sw-other"></i>其他</span></div>
+        <svg id="trend" viewBox="0 0 400 200" role="img" aria-label="每週到訪次數曲線圖"></svg>
+      </section>
+
+      <section class="panel" id="detail" hidden></section>
+
+          </aside>
+
+    <main class="col-right">
+      <section class="panel range-card" aria-label="日期範圍">
+        <div class="range">
+          <select id="year" aria-label="學年"></select>
+          <label for="from">由 <input type="date" id="from" min="2024-09-01" max="2026-10-14" value="2026-09-01"></label>
+          <span class="sep">至</span>
+          <label for="to"><input type="date" id="to" min="2024-09-01" max="2026-10-14" value="2026-10-14"></label>
+        </div>
+        <div class="stats">
+          <div><b><span id="s-visits">0</span><small>次</small></b><span>到訪醫療室</span></div>
+          <div class="head"><b><span id="s-head">0</span><small>次</small></b><span>撞頭</span></div>
+          <div><b><span id="s-other">0</span><small>次</small></b><span>其他原因</span></div>
+          <div><b><span id="s-streak">0</span><small>日</small></b><span>最長連續到訪</span><span class="rng" id="s-streak-range"></span></div>
+        </div>
+      </section>
+
+      <div class="cause-slot">
+      <section class="panel cause-panel" id="listSection">
+        <div id="listHead"></div>
+        <div id="list"></div>
+      </section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+const START = '2024-09-01', TODAY = '2026-10-14';   // first record on file / data is current up to this day
+// School year = 1 Sep to 31 Aug. Year key = the calendar year it starts in (2026 = 2026/27).
+const yearStart = y => `${y}-09-01`;
+const yearEnd = y => `${y + 1}-08-31`;
+const yearTo = y => (yearEnd(y) < TODAY ? yearEnd(y) : TODAY);
+const FIRST_YEAR = +START.slice(0, 4);
+const CUR_YEAR = +TODAY.slice(0, 4) - (TODAY.slice(5) < '09-01' ? 1 : 0);
+const DEFAULT_FROM = yearStart(CUR_YEAR), DEFAULT_TO = yearTo(CUR_YEAR);
+const CAUSES = { fall: '絆倒／跌倒', person: '與人碰撞', gear: '撞到設施／物件', other: '其他' };
+const AREAS = {
+  'head-top':   { label: '頭頂',        view: 'front', x: 114, y: 33 },
+  'forehead':   { label: '額頭',        view: 'front', x: 114, y: 52 },
+  'head-right': { label: '右側頭／右耳', view: 'front', x: 66,  y: 90 },
+  'nose':       { label: '鼻',          view: 'front', x: 114, y: 86 },
+  'shoulder-R': { label: '右膊頭',      view: 'front', x: 70,  y: 166 },
+  'elbow-R':    { label: '右手肘',      view: 'front', x: 59,  y: 212 },
+  'thigh-R':    { label: '右大腿',      view: 'front', x: 93,  y: 335 },
+  'knee-R':     { label: '右膝',        view: 'front', x: 93,  y: 372 },
+  'knee-L':     { label: '左膝',        view: 'front', x: 135, y: 372 },
+  'head-unk':   { label: '頭部（未指明位置）', view: 'front', x: 92,  y: 42 },
+  'face':       { label: '面部',        view: 'front', x: 140, y: 62 },
+  'eye-R':      { label: '右眼',        view: 'front', x: 96,  y: 74 },
+  'cheek-L':    { label: '左面頰',      view: 'front', x: 138, y: 97 },
+  'lip':        { label: '嘴唇',        view: 'front', x: 114, y: 102 },
+  'chin':       { label: '下巴',        view: 'front', x: 114, y: 121 },
+  'hand-L':     { label: '左手',        view: 'front', x: 192, y: 258 },
+  'finger-L':   { label: '左手手指',    view: 'front', x: 188, y: 280 },
+  'leg-R':      { label: '右腿（未指明位置）', view: 'front', x: 93, y: 398 },
+  'head-back':  { label: '後腦',        view: 'back',  x: 114, y: 62 },
+  'lower-back': { label: '下背',        view: 'back',  x: 114, y: 240 }
+};
+// Four big categories. Every visit falls in exactly one of them.
+const GROUPS = [
+  { key: 'head',  label: '頭', areas: ['head-top', 'forehead', 'head-right', 'head-back', 'nose', 'head-unk', 'face', 'eye-R', 'cheek-L', 'lip', 'chin'] },
+  { key: 'hand',  label: '手', areas: ['shoulder-R', 'elbow-R', 'hand-L', 'finger-L'] },
+  { key: 'leg',   label: '腳', areas: ['thigh-R', 'knee-R', 'knee-L', 'leg-R'] },
+  { key: 'torso', label: '身', areas: ['lower-back'] }
+];
+// One record per medical-room visit (one email each). a = affected spots.
+const INC = [
+  { d:'2024-09-23', k:'other', a:['eye-R'],    loc:'幼兒班操場',   c:'person', inj:'輕微腫起，冇傷口', tx:'冰敷', t:'喺幼兒班操場玩耍時，被另一個小朋友意外用玩具打中右眼，即時有少少腫起，但冇傷口。' },
+  { d:'2024-10-21', k:'other', a:['elbow-R'],  loc:'操場',         c:'fall',   inj:'擦損', tx:'清潔並貼膠布', t:'喺操場跑得好快，絆倒後右手肘擦損。' },
+  { d:'2025-03-25', k:'head',  a:['head-unk'], loc:'幼兒班操場',   c:'person', inj:'冇明顯傷痕', tx:'冷敷', t:'喺幼兒班操場跑步時同另一個小朋友撞頭，冇腫塊或其他明顯傷痕。' },
+  { d:'2025-05-14', k:'other', a:['knee-R'],   loc:'學校',         c:'other',  inj:'擦損', tx:'清潔並包紮', t:'右膝擦損。' },
+  { d:'2025-05-16', k:'other', a:['knee-L','elbow-R'], lbl:'左膝、右手肘', loc:'接待班操場', c:'fall', inj:'擦損', tx:'清潔並貼膠布', t:'午餐後排隊行路時絆到自己嘅飯盒跌倒，左膝同右手肘擦損。' },
+  { d:'2025-05-19', k:'other', a:['knee-L'],   loc:'幼兒班操場',   c:'fall',   inj:'擦損', tx:'清潔並貼膠布', t:'喺幼兒班操場跑步時絆倒，左膝擦損。' },
+  { d:'2025-09-18', k:'other', a:['nose'],     loc:'學校',         c:'person', inj:'抓傷', tx:'清潔', t:'被另一個小朋友抓傷鼻。' },
+  { d:'2025-09-24', k:'other', a:['face'],     loc:'自然區',       c:'other',  inj:'抓傷', tx:'消毒濕紙巾清潔', t:'喺自然區被荊棘刮傷面部。' },
+  { d:'2025-10-01', k:'other', a:['elbow-R'],  loc:'攀爬架',       c:'fall',   inj:'冇明顯傷痕，之後可能瘀青', tx:'檢查後冷敷', t:'由攀爬架跌落，撞到右手肘。' },
+  { d:'2025-11-12', k:'other', a:['lip'],      loc:'跳舞堂',       c:'other',  inj:'撞傷／瘀', tx:'冷敷', t:'跳舞堂時撞到嘴唇。' },
+  { d:'2025-11-13', k:'other', a:['elbow-R'],  loc:'操場',         c:'fall',   inj:'冇明顯傷痕', tx:'檢查後冷敷', t:'跑步時意外跌倒，右手肘受傷。' },
+  { d:'2025-11-19', k:'head',  a:['chin'],     loc:'操場',         c:'gear',   inj:'紅印，可能稍後瘀青', tx:'檢查後冷敷', t:'喺操場跑步時，下巴撞到水樽。' },
+  { d:'2025-11-25', k:'head',  a:['head-unk'], loc:'學校',         c:'person', inj:'輕微腫塊', tx:'檢查後冷敷', t:'另一個小朋友意外將一塊細木製積木跌落佢頭上，頭部有少少腫塊。' },
+  { d:'2026-01-16', k:'head',  a:['cheek-L'],  loc:'攀爬架',       c:'person', inj:'冇明顯傷痕', tx:'檢查後冷敷', t:'被另一個小朋友由攀爬架推跌；學校已同對方小朋友溝通並處理。' },
+  { d:'2026-02-02', k:'other', a:['chin'],     loc:'學校',         c:'gear',   inj:'紅印，可能稍後瘀青', tx:'冷敷', t:'玩耍時下巴撞到木製積木。' },
+  { d:'2026-03-11', k:'other', a:['hand-L'],   loc:'接待班遊樂設施', c:'gear', inj:'冇明顯傷痕', tx:'消毒濕紙巾清潔', t:'玩接待班遊樂設施時，左手被割傷。' },
+  { d:'2026-06-10', k:'head',  a:['forehead'], loc:'學校',         c:'person', inj:'冇明顯傷痕', tx:'冷敷', t:'玩耍時同另一個小朋友額頭相撞。' },
+  { d:'2026-07-01', k:'other', a:['finger-L'], lbl:'左手中指', loc:'學校', c:'other', inj:'小傷口', tx:'清潔', t:'玩耍時意外弄傷左手中指，有小傷口。' },
+  { d:'2026-07-02', k:'head',  a:['nose'],     loc:'學校（玩足球）', c:'gear', inj:'紅印', tx:'冷敷', t:'玩足球時球打中鼻，鼻有少少紅。' },
+  { d:'2026-07-08', k:'other', a:['leg-R'],    loc:'學校',         c:'person', inj:'擦損', tx:'清潔', t:'玩耍時被另一個小朋友意外推到，右腿擦損。' },
+  { d:'2026-09-07', k:'other', a:['thigh-R'],  lbl:'右大腿（另：左手肘）', loc:'trim trail',      c:'person', inj:'痠痛，冇明顯痕跡', tx:'冷敷', t:'玩 trim trail 時被另一個小朋友撞到，跌低後撞到右大腿同左手肘。' },
+  { d:'2026-09-10', k:'head',  a:['head-right'], lbl:'右耳', loc:'PE 堂',           c:'person', inj:'冇明顯傷痕', tx:'檢查後冷敷', t:'PE 堂同另一個小朋友相撞，撞到右耳／頭部位置。' },
+  { d:'2026-09-21', k:'other', a:['nose'],     lbl:'鼻', loc:'學校',                c:'other',  inj:'流鼻血', tx:'評估後可留校上課', t:'喺學校流鼻血。' },
+  { d:'2026-09-21', k:'other', a:['knee-L'],   loc:'KS1 操場',    c:'fall',   inj:'擦損（皮膚撕裂，冇流血）', tx:'清潔', t:'跑步時絆倒，左膝擦損到混凝土地面。' },
+  { d:'2026-09-24', k:'other', a:['elbow-R'],  loc:'PE 堂',       c:'fall',   inj:'擦損', tx:'消毒濕紙巾清潔', t:'上午 PE 堂跑步時跌倒，右手肘擦損。' },
+  { d:'2026-09-24', k:'other', a:['elbow-R'],  loc:'trim trail',  c:'fall',   inj:'擦損（小傷口，出血少於 5 分鐘）', tx:'清潔並貼膠布', t:'玩 trim trail 時絆倒，右手肘擦損。' },
+  { d:'2026-09-28', k:'other', a:['shoulder-R'], loc:'KS1 操場',  c:'person', inj:'冇明顯傷痕，覺得痠痛', tx:'冷敷', t:'另一個小朋友意外撞到佢，膊頭痠痛。' },
+  { d:'2026-09-28', k:'head',  a:['head-right'], loc:'monkey bar', c:'gear', inj:'冇明顯傷痕', tx:'檢查後冷敷', t:'小息時右側頭撞到 monkey bar。' },
+  { d:'2026-09-29', k:'other', a:['shoulder-R'], loc:'astro turf 攀爬架', c:'person', inj:'痠痛，冇痕跡', tx:'冰敷 10 分鐘', t:'玩攀爬架時被另一個小朋友意外撞到右膊頭。' },
+  { d:'2026-10-01', k:'head',  a:['head-top','head-back'], lbl:'頭頂、後腦', loc:'木製遊樂場、樹旁', c:'gear', inj:'痠痛約 5 分鐘，檢查時冇傷痕', tx:'冷敷', t:'爬 monkey bars 時撞到頭頂；14:45 小息喺樹旁邊再撞到後腦。呢次到訪有兩個撞擊位置。' },
+  { d:'2026-10-02', k:'head',  a:['head-top'], loc:'monkey bar',  c:'gear',   inj:'痠痛，檢查時冇傷痕', tx:'檢查後冷敷', t:'上午小息時頭頂撞到 monkey bar。' },
+  { d:'2026-10-02', k:'other', a:['lower-back'], loc:'KS1 操場',  c:'person', inj:'輕微痠痛，5 分鐘後消失', tx:'冷敷', t:'被另一個小朋友弄傷下背。' },
+  { d:'2026-10-05', k:'other', a:['knee-R'],   loc:'astro turf 攀爬磚', c:'gear', inj:'痠痛，冇痕跡', tx:'冰敷 10 分鐘', t:'右膝撞到攀爬磚。' },
+  { d:'2026-10-08', k:'head',  a:['forehead'], lbl:'額頭上方', loc:'trim trail', c:'gear', inj:'冇痕跡或腫塊', tx:'冷敷', t:'玩 trim trail 時撞到木柱，撞到額頭上方。' },
+  { d:'2026-10-08', k:'other', a:['knee-L'],   loc:'建構區',      c:'fall',   inj:'擦損（少量血，清潔後消失）', tx:'濕紙巾清潔並貼膠布', t:'跑步時絆到建構區積木，左膝擦損。' },
+  { d:'2026-10-09', k:'head',  a:['forehead'], loc:'小息',        c:'person', inj:'冇明顯傷痕', tx:'檢查後冷敷', t:'小息時額頭撞到另一個小朋友。' },
+  { d:'2026-10-09', k:'other', a:['knee-R'],   loc:'trim trail',  c:'gear',   inj:'冇明顯傷痕，痠痛約 5 分鐘', tx:'冷敷', t:'玩 trim trail 時右膝撞到木塊。' },
+  { d:'2026-10-12', k:'other', a:['knee-L'],   loc:'KS1 操場',    c:'fall',   inj:'輕微擦痕，冇出血', tx:'清潔', t:'絆倒後左膝跌落混凝土地面，擦痕清潔後消失。' },
+  { d:'2026-10-13', k:'head',  a:['head-top'], loc:'trim trail',  c:'fall',   inj:'冇明顯傷痕', tx:'冷敷', t:'玩 trim trail 時由木塊滑落跌倒，頭頂撞到地面。' },
+  { d:'2026-10-14', k:'head',  a:['head-right'], loc:'課室外',    c:'person', inj:'紅印', tx:'冰敷 10 分鐘', t:'準備入課室時由座位站起，右側頭撞到老師手持嘅手提電腦。' },
+  { d:'2026-10-14', k:'head',  a:['head-top'], loc:'廁所',        c:'gear',   inj:'冇明顯傷痕', tx:'冷敷', t:'喺廁所撞到廁所門，撞到頭頂。' }
+].map((x, i) => Object.assign({ i }, x));
+</script>
+
+<script>
+const $ = s => document.querySelector(s);
+const WD = ['日','一','二','三','四','五','六'];
+// group = selected category key, spot = selected spot key inside it.
+const state = { group: null, spot: null, from: DEFAULT_FROM, to: DEFAULT_TO, cause: null };
+
+const parts = d => d.split('-').map(Number);
+const dm = d => { const p = parts(d); return p[2] + '/' + p[1]; };
+const utc = d => { const p = parts(d); return new Date(Date.UTC(p[0], p[1] - 1, p[2])); };
+const iso = dt => dt.toISOString().slice(0, 10);
+// Heat level relative to the busiest value in the same set.
+const lvl = (n, max) => { const r = n / max; return r >= 0.67 ? 'hi' : r >= 0.34 ? 'mid' : 'lo'; };
+const groupOf = k => GROUPS.find(g => g.areas.includes(k));
+const groupByKey = key => GROUPS.find(g => g.key === key);
+const inGroup = (x, g) => x.a.some(k => g.areas.includes(k));
+const groupCount = (list, g) => list.filter(x => inGroup(x, g)).length;
+
+const visible = () => INC.filter(x => x.d >= state.from && x.d <= state.to);
+function counts(list) { const c = {}; list.forEach(x => x.a.forEach(k => { c[k] = (c[k] || 0) + 1; })); return c; }
+const label = x => x.lbl || x.a.map(k => AREAS[k].label).join('、');
+
+function inScope(k) {
+  if (state.spot) return k === state.spot;
+  if (state.group) return groupOf(k).key === state.group;
+  return true;
+}
+
+function renderSpots(c) {
+  const cmax = Math.max(1, ...Object.values(c));
+  ['front', 'back'].forEach(v => {
+    $('#spots-' + v).innerHTML = Object.keys(AREAS).filter(k => AREAS[k].view === v && c[k]).map((k, idx) => {
+      const a = AREAS[k], n = c[k], r = 4 + 1.6 * Math.min(n, 8);
+      const cls = `spot lv-${lvl(n, cmax)}${inScope(k) ? ' on' : ''}${state.spot === k ? ' sel' : ''}`;
+      return `<g class="${cls}" data-k="${k}" transform="translate(${a.x} ${a.y})" tabindex="0" role="button" aria-label="${a.label}，${n} 次" style="--d:${(idx * 0.45).toFixed(2)}s"><circle class="hit" r="${Math.max(r, 11)}"/><circle class="halo" r="${r}"/><circle class="core" r="${r}"/><text class="n" y="0.5" text-anchor="middle" dominant-baseline="central">${n}</text></g>`;
+    }).join('');
+  });
+  $('#body').classList.toggle('has-sel', !!state.group);
+}
+
+function renderBoxes(list) {
+  const el = $('#boxes');
+  const ns = GROUPS.map(g => groupCount(list, g));
+  const gmax = Math.max(1, ...ns);
+  el.classList.toggle('has-sel', !!state.group);
+  el.innerHTML = GROUPS.map((g, i) => {
+    const n = ns[i];
+    return `<button class="box${n ? ' lv-' + lvl(n, gmax) : ''}" data-g="${g.key}" aria-pressed="${state.group === g.key}"${n ? '' : ' disabled'}><span class="bl">${g.label}</span><b class="bn">${n}</b></button>`;
+  }).join('');
+}
+
+function nextWeekday(d) {
+  const t = utc(d);
+  do { t.setUTCDate(t.getUTCDate() + 1); } while (t.getUTCDay() === 0 || t.getUTCDay() === 6);
+  return iso(t);
+}
+// Longest run of consecutive school days (Mon to Fri, weekends skipped) with at least one visit.
+function longestStreak(list) {
+  const days = [...new Set(list.map(x => x.d))].filter(d => { const w = utc(d).getUTCDay(); return w !== 0 && w !== 6; }).sort();
+  let best = null, run = null;
+  days.forEach(d => {
+    if (run && nextWeekday(run.end) === d) { run.end = d; run.n++; } else run = { start: d, end: d, n: 1 };
+    if (!best || run.n >= best.n) best = { start: run.start, end: run.end, n: run.n };
+  });
+  return best;
+}
+function renderSummary(list) {
+  const head = list.filter(x => x.k === 'head').length;
+  $('#s-visits').textContent = list.length;
+  $('#s-head').textContent = head;
+  $('#s-other').textContent = list.length - head;
+  const st = longestStreak(list);
+  $('#s-streak').textContent = st ? st.n : 0;
+  $('#s-streak-range').textContent = st ? (st.n > 1 ? `${dm(st.start)} – ${dm(st.end)}` : dm(st.start)) : '';
+}
+
+// Monotone cubic curve through the points: smooth, and never dips below the lowest neighbour.
+function smooth(p) {
+  const n = p.length, f = v => v.toFixed(1);
+  if (n < 2) return p.map(q => `M${f(q.x)} ${f(q.y)}`).join('');
+  const dx = [], m = [], t = new Array(n);
+  for (let i = 0; i < n - 1; i++) { dx[i] = p[i + 1].x - p[i].x; m[i] = (p[i + 1].y - p[i].y) / dx[i]; }
+  t[0] = m[0]; t[n - 1] = m[n - 2];
+  for (let i = 1; i < n - 1; i++) t[i] = m[i - 1] * m[i] <= 0 ? 0 : (m[i - 1] + m[i]) / 2;
+  for (let i = 0; i < n - 1; i++) {
+    if (m[i] === 0) { t[i] = 0; t[i + 1] = 0; continue; }
+    const a = t[i] / m[i], b = t[i + 1] / m[i], s = a * a + b * b;
+    if (s > 9) { const k = 3 / Math.sqrt(s); t[i] = k * a * m[i]; t[i + 1] = k * b * m[i]; }
+  }
+  let d = `M${f(p[0].x)} ${f(p[0].y)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const h = dx[i] / 3;
+    d += `C${f(p[i].x + h)} ${f(p[i].y + t[i] * h)} ${f(p[i + 1].x - h)} ${f(p[i + 1].y - t[i + 1] * h)} ${f(p[i + 1].x)} ${f(p[i + 1].y)}`;
+  }
+  return d;
+}
+
+function renderTrend(list) {
+  const W = 400, H = 200, L = 26, R = 12, T = 22, B = 30;
+  const mon = utc(state.from);
+  mon.setUTCDate(mon.getUTCDate() - ((mon.getUTCDay() + 6) % 7));
+  const weeks = [];
+  for (let s = new Date(mon); iso(s) <= state.to; s.setUTCDate(s.getUTCDate() + 7)) {
+    const a = iso(s), e = new Date(s); e.setUTCDate(e.getUTCDate() + 6);
+    const inW = list.filter(x => x.d >= a && x.d <= iso(e));
+    const h = inW.filter(x => x.k === 'head').length;
+    weeks.push({ a, e: iso(e), head: h, other: inW.length - h });
+  }
+  const mx = Math.max(0, ...weeks.map(w => Math.max(w.head, w.other)));
+  const yMax = Math.max(4, Math.ceil(mx / 2) * 2);
+  const pw = W - L - R, ph = H - T - B, step = pw / weeks.length;
+  const many = weeks.length > 14, every = Math.max(1, Math.ceil(weeks.length / 7)); // long ranges: smaller dots, no value labels, sparse x labels
+  const px = i => L + step * i + step / 2;
+  const py = v => T + ph - v / yMax * ph;
+  let g = [0, yMax / 2, yMax].map(v => `<line class="grid" x1="${L}" x2="${W - R}" y1="${py(v)}" y2="${py(v)}"/><text x="${L - 6}" y="${py(v) + 4}" text-anchor="end">${v}</text>`).join('');
+  const pts = key => weeks.map((w, i) => ({ x: px(i), y: py(w[key]) }));
+  g += `<path class="ln ln-other" d="${smooth(pts('other'))}"/><path class="ln ln-head" d="${smooth(pts('head'))}"/>`;
+  weeks.forEach((w, i) => {
+    const x = px(i), headAbove = w.head >= w.other;
+    g += `<g><title>${dm(w.a)} – ${dm(w.e)}：撞頭 ${w.head}，其他 ${w.other}</title>`;
+    g += `<circle class="dot dot-other" cx="${x}" cy="${py(w.other)}" r="${many ? 2.2 : 4}"/><circle class="dot dot-head" cx="${x}" cy="${py(w.head)}" r="${many ? 2.2 : 4}"/>`;
+    if (!many && w.head) g += `<text class="val val-head" x="${x}" y="${py(w.head) + (headAbove ? -9 : 17)}">${w.head}</text>`;
+    if (!many && w.other) g += `<text class="val val-other" x="${x}" y="${py(w.other) + (headAbove ? 17 : -9)}">${w.other}</text>`;
+    if (i % every === 0) g += `<text x="${x}" y="${H - 9}" text-anchor="middle">${dm(w.a)}${many ? '' : '週'}</text>`;
+    g += '</g>';
+  });
+  $('#trend').innerHTML = g;
+}
+
+function renderDetail(list, c) {
+  const g = state.group ? groupByKey(state.group) : null;
+  $('#overview').hidden = !!g;
+  $('#detail').hidden = !g;
+  if (!g) return;
+  const n = groupCount(list, g), cmax = Math.max(1, ...Object.values(c));
+  const ks = g.areas.filter(k => c[k]).sort((a, b) => c[b] - c[a] || AREAS[a].label.localeCompare(AREAS[b].label, 'zh-HK'));
+  const sum = ks.reduce((s, k) => s + c[k], 0);
+  const rows = ks.map(k => `<li><button class="area-row lv-${lvl(c[k], cmax)}${state.spot === k ? ' is-sel' : ''}" data-k="${k}"><span>${AREAS[k].label}</span><span class="track"><span class="fill" style="width:${(c[k] / cmax * 100).toFixed(1)}%"></span></span><span class="num">${c[k]}</span></button></li>`).join('');
+  $('#detail').innerHTML = `<h2>${g.label}<span class="cnt">共 ${n} 次到訪</span></h2><ul class="area-list">${rows}</ul>` +
+    (sum > n ? '<p class="note">有到訪撞到多個位置，所以細項合計比到訪次數多。</p>' : '');
+}
+
+function itemHtml(x) {
+  const p = parts(x.d), wd = WD[utc(x.d).getUTCDay()];
+  return `<article class="item cz-${x.c}"><div class="dt"><b>${p[2]}</b><span>${p[1]}月</span><span>週${wd}</span></div><div><div class="item-top"><h3>${label(x)}</h3>${x.k === 'head' ? '<span class="tag">撞頭</span>' : ''}<span class="cause">${CAUSES[x.c]}</span></div><p>${x.t}</p><dl class="meta"><div><dt>地點</dt><dd>${x.loc}</dd></div><div><dt>傷況</dt><dd>${x.inj}</dd></div><div><dt>處理</dt><dd>${x.tx}</dd></div></dl></div></article>`;
+}
+const newest = (a, b) => b.d.localeCompare(a.d) || b.i - a.i;
+
+function renderList(list) {
+  let base = list;
+  if (state.spot) base = list.filter(x => x.a.includes(state.spot));
+  else if (state.group) base = list.filter(x => inGroup(x, groupByKey(state.group)));
+  const cc = {}; base.forEach(x => { cc[x.c] = (cc[x.c] || 0) + 1; });
+  if (state.cause && !cc[state.cause]) state.cause = null;
+  const g = state.group ? groupByKey(state.group) : null;
+  const scope = state.spot ? `${g.label} › ${AREAS[state.spot].label}` : g ? g.label : '';
+  $('#listHead').innerHTML = `<h2>原因${scope ? `<span class="cnt">${scope} · ${base.length} 筆</span>` : ''}</h2><div class="chips">` +
+    `<button class="chip" data-c="" aria-pressed="${!state.cause}">全部<em>${base.length}</em></button>` +
+    Object.keys(CAUSES).filter(k => cc[k]).map(k => `<button class="chip cz-${k}" data-c="${k}" aria-pressed="${state.cause === k}"><i></i>${CAUSES[k]}<em>${cc[k]}</em></button>`).join('') + '</div>';
+  const rows = base.filter(x => !state.cause || x.c === state.cause).sort(newest);
+  $('#list').innerHTML = rows.map(itemHtml).join('') || '<div class="empty">呢個日期範圍冇記錄</div>';
+}
+
+function render() {
+  const list = visible(), c = counts(list);
+  if (state.group && !groupCount(list, groupByKey(state.group))) { state.group = null; state.spot = null; }
+  if (state.spot && !c[state.spot]) state.spot = null;
+  renderSummary(list);
+  renderSpots(c);
+  renderBoxes(list);
+  renderDetail(list, c);
+  if (!state.group) renderTrend(list);
+  renderList(list);
+  $('#list').scrollTop = 0;
+  syncYear();
+}
+
+function toggleGroup(key) {
+  if (state.group === key && !state.spot) { state.group = null; state.spot = null; }
+  else { state.group = key; state.spot = null; }
+  render();
+}
+function pickSpot(k) {
+  if (state.spot === k) { state.spot = null; render(); return; }
+  state.group = groupOf(k).key;
+  state.spot = k;
+  render();
+}
+
+$('#body').addEventListener('click', e => { const s = e.target.closest('.spot'); if (s) pickSpot(s.dataset.k); });
+$('#body').addEventListener('keydown', e => {
+  const s = e.target.closest('.spot');
+  if (s && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pickSpot(s.dataset.k); }
+});
+$('#boxes').addEventListener('click', e => { const b = e.target.closest('.box'); if (b) toggleGroup(b.dataset.g); });
+$('#detail').addEventListener('click', e => {
+  const r = e.target.closest('.area-row');
+  if (r) { state.spot = state.spot === r.dataset.k ? null : r.dataset.k; render(); return; }
+  const go = e.target.closest('[data-go]');
+  if (!go) return;
+  if (go.dataset.go === 'all') { state.group = null; state.spot = null; } else { state.spot = null; }
+  render();
+});
+$('#listHead').addEventListener('click', e => {
+  const ch = e.target.closest('.chip');
+  if (ch) { state.cause = ch.dataset.c || null; render(); }
+});
+// Year dropdown, newest first. Shows "自訂範圍" whenever the two dates do not match a whole school year.
+(function () {
+  let h = '';
+  for (let y = CUR_YEAR; y >= FIRST_YEAR; y--) h += `<option value="${y}">${y}/${String(y + 1).slice(2)}</option>`;
+  $('#year').innerHTML = h;
+})();
+function syncYear() {
+  let v = null;   // custom date range: dropdown shows nothing selected
+  for (let y = FIRST_YEAR; y <= CUR_YEAR; y++) if (state.from === yearStart(y) && state.to === yearTo(y)) v = String(y);
+  if (v) $('#year').value = v; else $('#year').selectedIndex = -1;
+}
+$('#year').addEventListener('change', e => {
+  const y = +e.target.value;
+  if (!y) return;
+  $('#from').value = yearStart(y); $('#to').value = yearTo(y);
+  onRange();
+});
+function onRange() {
+  let f = $('#from').value || START, t = $('#to').value || TODAY;
+  if (f > t) { const tmp = f; f = t; t = tmp; }
+  state.from = f < START ? START : f; state.to = t > TODAY ? TODAY : t;
+  $('#from').value = state.from; $('#to').value = state.to;
+  render();
+}
+$('#from').addEventListener('change', onRange);
+$('#to').addEventListener('change', onRange);
+
+render();
+
+// Mobile sticky stack: measure header / summary heights so the next pinned block sits right under the previous one.
+(function(){
+  const root=document.documentElement,h=document.querySelector('header'),st=document.querySelector('.stats');
+  const bx=document.querySelector('.boxes-wrap');
+  const set=()=>{
+    const hh=h.offsetHeight,sh=st.offsetHeight,bh=bx.offsetHeight;
+    root.style.setProperty('--hh',hh+'px');root.style.setProperty('--sh',sh+'px');
+    root.style.setProperty('--stack',(hh+sh+bh+16)+'px'); // header + summary + totals + two 8px gaps
+  };
+  set();
+  if(window.ResizeObserver){const ro=new ResizeObserver(set);ro.observe(h);ro.observe(st);ro.observe(bx);}
+  window.addEventListener('resize',set);
+})();
+
+// Mobile dock lock: once the cause panel sits under the totals, the page must not move further down or rubber-band.
+// CSS overscroll-behavior is not reliable on iOS, so touchmoves are cancelled by hand.
+(function(){
+  const mq=window.matchMedia('(max-width:820px)'),panel=document.querySelector('.cause-panel'),list=document.querySelector('#list');
+  let lastY=0;
+  const docked=()=>panel.classList.contains('docked');
+  document.addEventListener('touchstart',e=>{lastY=e.touches[0].clientY;},{passive:true});
+  document.addEventListener('touchmove',e=>{
+    if(!docked())return;
+    const y=e.touches[0].clientY,up=y<lastY;lastY=y;       // finger moving up = scrolling content down
+    if(list.contains(e.target)){
+      const atTop=list.scrollTop<=0,atEnd=list.scrollTop+list.clientHeight>=list.scrollHeight-1;
+      if((up&&atEnd)||(!up&&atTop))e.preventDefault();      // list edges never pass the gesture to the page
+    }else if(up){
+      e.preventDefault();                                   // page is already at its docked end
+    }
+  },{passive:false});
+})();
+
+// Dock: when the slot reaches the bottom of the pinned stack, fix the panel exactly there.
+(function(){
+  const mq=window.matchMedia('(max-width:820px)'),slot=document.querySelector('.cause-slot'),panel=document.querySelector('.cause-panel');
+  const DOCK_TOLERANCE=1;
+  function update(){
+    const stack=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--stack'))||0;
+    const r=slot.getBoundingClientRect();
+    const on=mq.matches&&r.top<=stack+DOCK_TOLERANCE;
+    panel.classList.toggle('docked',on);
+    if(on){panel.style.top=stack+'px';panel.style.left=r.left+'px';panel.style.width=r.width+'px';panel.style.height=r.height+'px';}
+    else{['top','left','width','height'].forEach(k=>panel.style.removeProperty(k));}
+  }
+  window.addEventListener('scroll',update,{passive:true});
+  window.addEventListener('resize',update);
+  if(window.ResizeObserver){const ro=new ResizeObserver(update);ro.observe(document.querySelector('.boxes-wrap'));ro.observe(document.querySelector('.stats'));ro.observe(document.querySelector('header'));}
+  update();
+})();
+</script>
